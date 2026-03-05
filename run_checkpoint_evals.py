@@ -35,9 +35,9 @@ PRESET_IDS = [
 ]
 
 
-def run(cmd, **kw):
+def run(cmd, timeout=None, **kw):
     print(f"  $ {cmd}")
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, **kw)
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout, **kw)
 
 
 def wait_healthy(url, label, timeout=120):
@@ -164,11 +164,11 @@ def main():
             results[ckpt] = "CHECKOUT_FAILED"
             continue
 
-        # Rebuild and restart platform
-        print(f"\n  Rebuilding platform ...")
-        r = run("docker compose up -d --build platform")
+        # Rebuild and restart all services (docker-compose changes per checkpoint)
+        print(f"\n  Rebuilding services ...")
+        r = run("docker compose up -d --build --remove-orphans", timeout=300)
         if r.returncode != 0:
-            print(f"  FAILED to rebuild platform: {r.stderr}")
+            print(f"  FAILED to rebuild: {r.stderr}")
             results[ckpt] = "BUILD_FAILED"
             continue
 
@@ -176,6 +176,27 @@ def main():
         if not wait_healthy(f"{PLATFORM_URL}/api/health", "platform"):
             results[ckpt] = "PLATFORM_UNHEALTHY"
             continue
+
+        # Ingest RAG data if weaviate is available (checkpoint-2+)
+        if ckpt >= 2:
+            # Wait for weaviate to be healthy
+            if not wait_healthy(f"{WEAVIATE_URL}/v1/.well-known/ready", "weaviate", timeout=60):
+                print("  WARNING: Weaviate not ready, RAG may not work")
+            else:
+                try:
+                    r2 = urllib.request.urlopen(
+                        f"{WEAVIATE_URL}/v1/objects?class=Documents&limit=1", timeout=5
+                    )
+                    data = json.loads(r2.read())
+                    if not data.get("objects"):
+                        print("  Ingesting RAG data ...")
+                        ir = run("docker compose exec -T platform python -m scripts.ingest", timeout=120)
+                        if ir.returncode != 0:
+                            print(f"  Ingest failed: {ir.stderr[:200]}")
+                        else:
+                            print("  Ingestion complete.")
+                except Exception as e:
+                    print(f"  Weaviate check error: {e}")
 
         # Run eval
         preset = presets_by_id.get(preset_id)
