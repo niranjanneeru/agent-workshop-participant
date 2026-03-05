@@ -7,6 +7,9 @@ TAVILY_API_KEY=<your-tavily-api-key>
 # Weaviate Vector DB
 WEAVIATE_URL=http://localhost:8090
 
+# MCP server SSE URL (Docker Compose sets this for streamlit: http://mcp:8000/sse)
+MCP_URL=http://mcp:8000/sse
+
 # MySQL Database (kvkart)
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
