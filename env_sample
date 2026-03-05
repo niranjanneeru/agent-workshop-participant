@@ -1,0 +1,15 @@
+OPENAI_API_KEY=<your-openai-api-key>
+LITELLM_URL=<your-litellm-url>
+
+# MySQL Database (kvkart)
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=diya
+MYSQL_PASSWORD=diya_password
+MYSQL_DATABASE=kvkart
+
+# LangSmith for tracing
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=<your-langsmith-api-key>
+LANGSMITH_PROJECT="agent-dev-workshop"
