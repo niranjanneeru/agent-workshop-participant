@@ -24,28 +24,28 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # weaviate:
-  #   image: cr.weaviate.io/semitechnologies/weaviate:1.29.0
-  #   container_name: weaviate
-  #   ports:
-  #     - "8090:8080"
-  #     - "50051:50051"
-  #   environment:
-  #     QUERY_DEFAULTS_LIMIT: 25
-  #     AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
-  #     PERSISTENCE_DATA_PATH: /var/lib/weaviate
-  #     DEFAULT_VECTORIZER_MODULE: none
-  #     ENABLE_API_BASED_MODULES: "false"
-  #     CLUSTER_HOSTNAME: node1
-  #   volumes:
-  #     - weaviate_data:/var/lib/weaviate
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.29.0
+    container_name: weaviate
+    ports:
+      - "8090:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_API_BASED_MODULES: "false"
+      CLUSTER_HOSTNAME: node1
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # mcp:
   #   build:
@@ -81,11 +81,14 @@ services:
       - PYTHONUNBUFFERED=1
       - STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll
       - STREAMLIT_SERVER_RUN_ON_SAVE=true
+      - WEAVIATE_URL=http://weaviate:8080
       - MYSQL_HOST=kvkart-db
     stdin_open: true
     tty: true
     depends_on:
       kvkart-db:
+        condition: service_healthy
+      weaviate:
         condition: service_healthy
 
   platform:
@@ -98,9 +101,12 @@ services:
     env_file: .env
     environment:
       - PYTHONUNBUFFERED=1
+      - WEAVIATE_URL=http://weaviate:8080
       - MYSQL_HOST=kvkart-db
     depends_on:
       kvkart-db:
+        condition: service_healthy
+      weaviate:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:

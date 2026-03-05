@@ -17,8 +17,11 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = Field(...)
     OPENAI_LLM_MODEL: str = Field(default="gpt-4o-mini")
+    OPENAI_EMBEDDING_MODEL: str = Field(default="text-embedding-3-small")
 
     LITELLM_URL: str | None = Field(default=None)
+
+    WEAVIATE_URL: str = Field(default="http://localhost:8090")
 
     MYSQL_HOST: str = Field(default="localhost")
     MYSQL_PORT: int = Field(default=3306)
