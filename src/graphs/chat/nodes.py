@@ -3,14 +3,17 @@ import logging
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from pydantic import BaseModel
 
 from src.config import settings
 from src.embedding.openai import OpenAIEmbedding
 from src.graphs.chat.prompts import (
+    AGENT_GUARDRAILS_PROMPT,
     GUARDRAILS_GENERAL_PROMPT,
     INTENT_CLASSIFIER_PROMPT,
     ORDER_MANAGEMENT_SYSTEM_PROMPT,
     PRODUCT_DISCOVERY_SYSTEM_PROMPT,
+    USER_GUARDRAILS_PROMPT,
 )
 from src.graphs.chat.states import AgentState, Intent
 from src.llm.openai import OpenAILLM
@@ -54,6 +57,66 @@ _product_discovery_react = create_agent(
     tools=_product_discovery_tools,
     system_prompt=PRODUCT_DISCOVERY_SYSTEM_PROMPT,
 )
+
+
+class GuardrailResult(BaseModel):
+    content: str
+    flag: bool
+
+
+_user_guardrails_llm = _llm.model.with_structured_output(GuardrailResult)
+_agent_guardrails_llm = _llm.model.with_structured_output(GuardrailResult)
+
+
+def _last_human_and_context(state: AgentState) -> list:
+    history = list(state.messages)
+    last_human_index = None
+    for index in range(len(history) - 1, -1, -1):
+        if isinstance(history[index], HumanMessage):
+            last_human_index = index
+            break
+
+    if last_human_index is None:
+        raw = history[-10:]
+    else:
+        start = max(0, last_human_index - 10)
+        raw = history[start : last_human_index + 1]
+    return _messages_for_llm_no_tools(raw)
+
+
+def _last_ai_message_index(messages: list) -> int | None:
+    for index in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[index], AIMessage):
+            return index
+    return None
+
+
+def user_guardrails_agent(state: AgentState) -> dict:
+    context_messages = _last_human_and_context(state)
+    messages = [SystemMessage(content=USER_GUARDRAILS_PROMPT)] + context_messages
+    result = _user_guardrails_llm.invoke(messages)
+    if result.flag:
+        blocked = (
+            result.content.strip() or "I can only help with KVKart-related requests."
+        )
+        last_user = next(
+            (
+                m.content
+                for m in reversed(state.messages)
+                if isinstance(m, HumanMessage)
+            ),
+            "",
+        )
+        logger.warning(
+            "user_guardrails_agent BLOCKED request | user_message=%s | response=%s",
+            (last_user or "")[:200],
+            blocked[:200],
+        )
+        return {
+            "user_guardrail_flag": True,
+            "messages": [AIMessage(content=blocked)],
+        }
+    return {"user_guardrail_flag": False}
 
 
 def _messages_for_llm_no_tools(messages: list) -> list:
@@ -108,14 +171,14 @@ def _log_tools_and_reply(new_messages: list, node_name: str) -> None:
 
 def order_management_agent(state: AgentState) -> dict:
     result = asyncio.run(_order_management_react.ainvoke({"messages": state.messages}))
-    new_msgs = result["messages"][len(state.messages):]
+    new_msgs = result["messages"][len(state.messages) :]
     _log_tools_and_reply(new_msgs, "order_management_agent")
     return {"messages": new_msgs}
 
 
 def product_discovery_agent(state: AgentState) -> dict:
     result = _product_discovery_react.invoke({"messages": state.messages})
-    new_msgs = result["messages"][len(state.messages):]
+    new_msgs = result["messages"][len(state.messages) :]
     _log_tools_and_reply(new_msgs, "product_discovery_agent")
     return {"messages": new_msgs}
 
@@ -132,3 +195,44 @@ def general_assistant_agent(state: AgentState) -> dict:
         )
         return {"messages": [AIMessage(content=reply)]}
     return {}
+
+
+def agent_guardrails_agent(state: AgentState) -> dict:
+    messages = list(state.messages)
+    ai_index = _last_ai_message_index(messages)
+    if ai_index is None:
+        return {
+            "agent_response_safe": False,
+            "messages": [AIMessage(content="Something went wrong")],
+        }
+
+    candidate = messages[ai_index].content or ""
+    context = messages[max(0, ai_index - 10) : ai_index]
+    context_for_llm = _messages_for_llm_no_tools(context)
+    guardrail_messages = [
+        SystemMessage(content=AGENT_GUARDRAILS_PROMPT),
+        *context_for_llm,
+        HumanMessage(content=f"Draft response to validate:\n{candidate}"),
+    ]
+    result = _agent_guardrails_llm.invoke(guardrail_messages)
+
+    if result.flag:
+        logger.warning(
+            "agent_guardrails_agent FLAGGED draft (replaced with fallback) | draft_snippet=%s",
+            candidate[:200],
+        )
+        return {
+            "agent_response_safe": False,
+            "messages": [AIMessage(content="Something went wrong")],
+        }
+
+    sanitized_content = result.content.strip()
+    if not sanitized_content or sanitized_content == candidate:
+        return {"agent_response_safe": True}
+
+    if sanitized_content != candidate:
+        logger.info("agent_guardrails_agent PII-masked response (content changed)")
+    return {
+        "agent_response_safe": True,
+        "messages": [AIMessage(content=sanitized_content)],
+    }

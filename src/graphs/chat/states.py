@@ -15,3 +15,5 @@ class Intent(StrEnum):
 class AgentState(BaseModel):
     messages: Annotated[list[AnyMessage], add_messages]
     intent: Intent | None = None
+    user_guardrail_flag: bool = False
+    agent_response_safe: bool = True
