@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     WEAVIATE_URL: str = Field(default="http://localhost:8090")
 
+    TAVILY_API_KEY: str = Field(...)
+
     MYSQL_HOST: str = Field(default="localhost")
     MYSQL_PORT: int = Field(default=3306)
     MYSQL_USER: str = Field(default="diya")

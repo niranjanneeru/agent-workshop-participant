@@ -1,6 +1,9 @@
 OPENAI_API_KEY=<your-openai-api-key>
 LITELLM_URL=<your-litellm-url>
 
+# Product discovery: web search (get key at app.tavily.com)
+TAVILY_API_KEY=<your-tavily-api-key>
+
 # Weaviate Vector DB
 WEAVIATE_URL=http://localhost:8090
 

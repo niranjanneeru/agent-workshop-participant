@@ -9,6 +9,7 @@ from src.graphs.chat.states import AgentState
 from src.llm.openai import OpenAILLM
 from src.tools import all_tools
 from src.tools.rag import create_rag_tools
+from src.tools.search import get_web_search_tools
 from src.vector_db.weaviate import WeaviateVectorDB
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ def _build_tool_list():
         tools.extend(create_rag_tools(vector_db=db, embedding=embedding))
     except Exception:
         pass
+    tools.extend(get_web_search_tools())
     return tools
 
 
