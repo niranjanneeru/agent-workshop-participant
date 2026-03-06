@@ -95,9 +95,6 @@ services:
     container_name: agent-platform
     ports:
       - "0.0.0.0:8081:8081"
-    volumes:
-      - .:/app
-      - ./platform/frontend/dist:/app/platform/static
     env_file: .env
     environment:
       - PYTHONUNBUFFERED=1
