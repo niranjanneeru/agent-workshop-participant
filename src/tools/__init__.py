@@ -130,3 +130,5 @@ all_tools = [
     # Notifications
     get_user_notifications, mark_notification_read,
 ]
+
+from src.tools.rag import create_rag_tools
